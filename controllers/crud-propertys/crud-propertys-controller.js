@@ -1,4 +1,4 @@
-import { imageUploadUtils } from "../../helpers/cloudinary.js";
+import { deleteImage, imageUploadUtils } from "../../helpers/cloudinary.js";
 import { Property } from "../../models/Property.js";
 
 //* ------ Crear Propiedad
@@ -11,10 +11,20 @@ export const createProperty = async (req, res) => {
     
       // Creamos una nueva instancia del modelo con los datos proporcionados
       const newProperty = new Property({ 
-        title, description, type, operation, price, currency, location, features, images, status, publishedAt, owner
+        title, 
+        description, 
+        type, 
+        operation, 
+        price, 
+        currency, 
+        location, 
+        features, 
+        images, // Ahora es un array de { url, publicId }
+        status, 
+        publishedAt, 
+        owner
       });
       
-  
       // Guardamos la nueva propiedad en la base de datos
       await newProperty.save();
   
@@ -86,33 +96,76 @@ export const editProperty = async (req, res) => {
 
 //* ------ Eliminar Propiedad
 export const deleteProperty = async (req, res) => {
-  try {
-    const { id } = req.params; // Extraemos el ID de la propiedad a eliminar
-    const findProperty = await Property.findByIdAndDelete(id) // Buscamos la propiedad en la base de datos
+    const { id } = req.params;
 
-    if(!findProperty) return res.status(404).json({
-      success: false,
-      message: "La propiedad no existe o ya ha sido eliminada."
-    })
+    try {
+        // Verificar si el ID es válido
+        if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).json({
+                success: false,
+                message: "El ID proporcionado no es válido."
+            });
+        }
 
-    return res.status(200).json({
-      success: true,
-      message: "La propiedad ha sido eliminada correctamente."
-    })
+        // Buscar la propiedad
+        const property = await Property.findById(id);
+        if (!property) {
+            return res.status(404).json({
+                success: false,
+                message: "La propiedad no existe o ya ha sido eliminada."
+            });
+        }
 
-  } catch (error) {
-    console.error("Error al eliminar la propiedad:", error.message);
-    res.status(500).json({
-      success: false,
-      message: "Ocurrió un error en el servidor. Inténtelo nuevamente más tarde."
-    });
-  }
-}
+        // Verificar autenticación
+        if (!req.user || !req.user._id) {
+            return res.status(401).json({
+                success: false,
+                message: "No estás autenticado. Inicia sesión para realizar esta acción."
+            });
+        }
+
+        // Verificar permisos
+        if (property.owner.toString() !== req.user._id) {
+            return res.status(403).json({
+                success: false,
+                message: "No tienes autorización para eliminar esta propiedad."
+            });
+        }
+
+        // Eliminar imágenes de Cloudinary
+        if (property.images && property.images.length > 0) {
+            const deletePromises = property.images.map(async (image) => {
+                if (!image.publicId) {
+                    throw new Error(`Falta publicId para la imagen: ${image.url}`);
+                }
+                return await deleteImage(image.publicId);
+            });
+            await Promise.all(deletePromises);
+        }
+
+        // Eliminar la propiedad de MongoDB
+        await Property.findByIdAndDelete(id);
+
+        return res.status(200).json({
+            success: true,
+            message: "La propiedad y sus imágenes han sido eliminadas correctamente."
+        });
+    } catch (error) {
+        console.error("Error al eliminar la propiedad:", {
+            message: error.message,
+            stack: error.stack,
+            id
+        });
+        return res.status(500).json({
+            success: false,
+            message: `Ocurrió un error en el servidor: ${error.message}`
+        });
+    }
+};
 
 //* ------ Subimos imagenes de las propiedades
 export const uploadPropertyImages = async (req, res) => {
   try {
-    // console.log("📂 Archivos recibidos en backend:", req.files); // 🔍 Verifica si los archivos llegan
 
     if(!req.files || req.files.length === 0) {
       return res.status(400).json({
@@ -125,8 +178,8 @@ export const uploadPropertyImages = async (req, res) => {
     const uploadPromise = req.files.map(async (file) => {
       const b64 = Buffer.from(file.buffer).toString("base64");
       const url = `data:${file.mimetype};base64,${b64}`;
-      //-Submimos la imagen en la que estamos a cloudinary
-      return await imageUploadUtils(url);
+      const { url: secureUrl, publicId } = await imageUploadUtils(url); // Extraemos url y publicId
+      return { url: secureUrl, publicId };
     });
 
     //- Esperamos que todas las imagenes se suban

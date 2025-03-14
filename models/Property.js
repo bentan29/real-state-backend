@@ -34,8 +34,12 @@ const PropertyZodCreate = z.object({
         builtArea: z.number().optional(),
         garage: z.boolean().default(false),
     }),
-    images: z.array(z.string().url("Debe ser una URL válida"))
-        .optional(),
+    images: z.array(
+        z.object({
+            url: z.string().url("Debe ser una URL válida"),
+            publicId: z.string().min(1, "El publicId es obligatorio")
+        })
+    ).optional(),
     status: z.enum(["disponible", "reservado", "vendido", "alquilado"], "Estado no válido")
         .default("disponible"),
     publishedAt: z.date()
@@ -75,8 +79,12 @@ const PropertyZodEdit = z.object({
         builtArea: z.number().positive("El área construida debe ser mayor a 0").optional(),
         garage: z.boolean().default(false),
     }),
-    images: z.array(z.string().url("Debe ser una URL válida"))
-        .optional(),
+    images: z.array(
+        z.object({
+            url: z.string().url("Debe ser una URL válida"),
+            publicId: z.string().min(1, "El publicId es obligatorio")
+        })
+    ).optional(),
     status: z.enum(["disponible", "reservado", "vendido", "alquilado"], "Estado no válido")
         .default("disponible"),
     publishedAt: z.date()
@@ -112,7 +120,10 @@ const PropertySchema = new mongoose.Schema({
         builtArea: { type: Number, default: 0  },
         garage: { type: Boolean, default: false },
     },
-    images: { type: [String], default: [] },
+    images: [{
+        url: { type: String, required: true },
+        publicId: { type: String, required: true }
+    }],
     status: { type: String, enum: ["disponible", "reservado", "vendido", "alquilado"], default: "disponible" },
     publishedAt: { type: Date, default: Date.now },
     owner: { 

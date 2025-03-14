@@ -10,18 +10,35 @@ cloudinary.config({
 
 // Definimos el almacenamiento de Multer en memoria para procesar los archivos antes de subirlos.
 const storage = new multer.memoryStorage();
+const upload = multer({ storage });
 
-// Función utilitaria para cargar imágenes en Cloudinary.
-const imageUploadUtils = async(file) => {
-    const result = await cloudinary.uploader.upload(file, {
-        resource_type: 'auto', // Permite la subida de cualquier tipo de archivo (imágenes, videos, etc.).
-    })
-    return result;
-}
+// Función para subir imágenes a Cloudinary.
+const imageUploadUtils = async (file) => {
+    try {
+        const result = await cloudinary.uploader.upload(file, {
+            resource_type: 'auto', // Permite la subida de cualquier tipo de archivo.
+        });
+        return {
+            url: result.secure_url, // URL pública de la imagen
+            publicId: result.public_id // Identificador único para eliminarla después
+        };
+    } catch (error) {
+        throw new Error("Error al subir la imagen a Cloudinary: " + error.message);
+    }
+};
 
-const upload = multer({storage});
+// Función para eliminar imágenes de Cloudinary.
+const deleteImage = async (publicId) => {
+    try {
+        const result = await cloudinary.uploader.destroy(publicId);
+        return result;
+    } catch (error) {
+        throw new Error("Error al eliminar la imagen de Cloudinary: " + error.message);
+    }
+};
 
 export {
-    upload, 
-    imageUploadUtils
-}
+    upload,
+    imageUploadUtils,
+    deleteImage
+};

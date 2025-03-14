@@ -4,12 +4,16 @@ import { createProperty, deleteProperty, editProperty, fetchSellerPropertys, upl
 import { upload } from '../../helpers/cloudinary.js';
 import validateWithZod from '../../middleware/validationZod.js';
 import { PropertyZodCreate, PropertyZodEdit } from '../../models/Property.js';
+import { authMiddleware } from '../../helpers/jwt.js';
 
 const router = express.Router();
 
 //*---- Rutas publicas ---------------------
 router.get('/get', fetchPropertys)
 router.get('/getPropertyDetails/:id', getPropertyDetails)
+
+// Middleware de autenticación para rutas privadas
+router.use(authMiddleware); // Protege todas las rutas siguientes
 
 //*---- Rutas privadas --------------------
 //---- Crud ----
